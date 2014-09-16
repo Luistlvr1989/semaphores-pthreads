@@ -1,23 +1,26 @@
-#include <semaphore.h>  /* Semaphore */
-
 #include "broadcast.h"
-
-#define TRUE 1
-#define SIZE 5
 
 /* START GLOBALS*/
 int buffer[SIZE];
-int nextSend = 0;
-int waitSend = 0;
 int totalReaders[SIZE];
 
-int n_senders;
-int n_receivers;
+// Counters
+int nextSend = 0;
+int waitSend = 0;
 
+// Receivers Info
+int n_receivers;
+int* current;
+
+// Lock for waitSend
 sem_t lock;
-sem_t canSend;
+
+// Mutual Exclusion
+sem_t mExclusionW;
+sem_t mExclusionR;
+
+// Semaphores for Full and Empty Buffer
 sem_t bufferFull;
-sem_t mutualExclusion;
 sem_t bufferEmpty[SIZE];
 /* END GLOBALS */
 
@@ -25,16 +28,22 @@ int inicia(int transmissores, int receptores) {
     int i;
     int rc = 0;
 
-    n_senders = transmissores;
     n_receivers = receptores;
+    current = malloc(n_receivers * sizeof(int*));
+
+    for(i = 0; i < n_receivers; i++) 
+        current[i] = 0;
+
+    for(i = 0; i < SIZE; i++)
+        totalReaders[i] = 0;
 
     rc = sem_init(&lock, 0, 1);
     checkResults("sem_init()\n", rc);
 
-    rc = sem_init(&canSend, 0, 1);
+    rc = sem_init(&mExclusionW, 0, 1);
     checkResults("sem_init()\n", rc);
 
-    rc = sem_init(&mutualExclusion, 0, 1);
+    rc = sem_init(&mExclusionR, 0, 1);
     checkResults("sem_init()\n", rc);
 
     rc = sem_init(&bufferFull, 0, 0);
@@ -45,22 +54,21 @@ int inicia(int transmissores, int receptores) {
         checkResults("sem_init()\n", rc);
     }
 
-    for(i = 0; i < SIZE; i++) {
-        totalReaders[i] = 0;
-    }
+    return TRUE;
 }
 
 void envia(int val) {
-    int i;
+    int i, tmpSend;
 
-    sem_wait(&canSend);
-    sem_wait(&bufferEmpty[nextSend % SIZE]);
-
-    printf(">Inserting %d to position %d(%d)\n", val, nextSend % SIZE, nextSend);
-    buffer[nextSend % SIZE] = val;
+    sem_wait(&mExclusionW);
+    tmpSend = nextSend % SIZE;
     nextSend++;
-    
-    sem_post(&canSend); 
+    sem_post(&mExclusionW); 
+
+    sem_wait(&bufferEmpty[tmpSend]);
+
+    buffer[tmpSend] = val;
+    printf(">Inserting %d to position %d\n", val, tmpSend);
 
     sem_wait(&lock);
     for(i = 0; i < waitSend; i++)
@@ -69,13 +77,13 @@ void envia(int val) {
     sem_post(&lock);
 }
 
-int recebe(int position, int thread_id) {
-    int item;
+int recebe(int id) {
+    int item, position;
 
-    //while(position >= nextSend);
+    position = current[id] % SIZE;
     
     sem_wait(&lock);
-    if(position >= nextSend) {
+    if(current[id] >= nextSend) {
         waitSend++;
         sem_post(&lock);
         sem_wait(&bufferFull);
@@ -83,17 +91,17 @@ int recebe(int position, int thread_id) {
         sem_post(&lock);
     }
 
-    sem_wait(&mutualExclusion);
-    totalReaders[position % SIZE]++;
-    sem_post(&mutualExclusion);
+    item = buffer[position];
+    printf("<(Thread %d)Reading %d from position %d\n", id, item, position);
+    current[id]++;
 
-    item = buffer[position % SIZE];
-    printf("<(Thread %d)Reading %d from position %d - %d readers\n", thread_id, item, position % SIZE, totalReaders[position % SIZE]);
-
-    sem_wait(&mutualExclusion);
-    if(totalReaders[position % SIZE] >= n_receivers) {
-        totalReaders[position % SIZE] = 0;
-        sem_post(&bufferEmpty[position % SIZE]);
+    sem_wait(&mExclusionR);
+    totalReaders[position]++;
+    if(totalReaders[position] >= n_receivers) {
+        totalReaders[position] = 0;
+        sem_post(&bufferEmpty[position]);
     }
-    sem_post(&mutualExclusion);
+    sem_post(&mExclusionR);
+
+    return item;
 }

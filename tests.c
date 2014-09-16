@@ -23,7 +23,6 @@ int main(int argc, char** argv) {
 	int i, j;
 	int rc = 0;
 	char* p;
-	//int* id;
 
 	if(argc != 3) {
 	 	printf("Specify the senders and receivers\n");
@@ -82,8 +81,8 @@ int main(int argc, char** argv) {
 }
 
 /**
- * [senderThread description]
- * @param param [description]
+ * [senderThread Thread function to call envia()]
+ * @param param [A value to be send]
  */
 void* senderThread(void* param) {
    	int value;
@@ -95,17 +94,17 @@ void* senderThread(void* param) {
 }
 
 /**
- * [receiverThread description]
- * @param param [description]
+ * [receiverThread Thread function to call recebe() for each sender]
+ * @param param [The id of the receiver thread]
  */
 void* receiverThread(void* param) {
-	int value;
-   	value = *((int*) param);
+	int id;
+   	id = *((int*) param);
 
 	int i;
 	
 	for(i = 0; i < N_SENDERS; i++)
-		recebe(i, value);
+		recebe(id);
 
     return NULL;
 }
