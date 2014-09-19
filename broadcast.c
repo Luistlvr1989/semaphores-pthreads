@@ -14,13 +14,14 @@ int* current;
 
 // Lock for waitSend
 sem_t lock;
+sem_t waitSender;
 
 // Mutual Exclusion
 sem_t mExclusionW;
 sem_t mExclusionR;
 
 // Semaphores for Full and Empty Buffer
-sem_t bufferFull;
+sem_t bufferFull[SIZE];
 sem_t bufferEmpty[SIZE];
 /* END GLOBALS */
 
@@ -40,14 +41,19 @@ int inicia(int transmissores, int receptores) {
     rc = sem_init(&lock, 0, 1);
     checkResults("sem_init()\n", rc);
 
+    rc = sem_init(&waitSender, 0, 0);
+    checkResults("sem_init()\n", rc);
+
     rc = sem_init(&mExclusionW, 0, 1);
     checkResults("sem_init()\n", rc);
 
     rc = sem_init(&mExclusionR, 0, 1);
     checkResults("sem_init()\n", rc);
 
-    rc = sem_init(&bufferFull, 0, 0);
-    checkResults("sem_init()\n", rc);
+    for(i = 0; i < SIZE; i++) {
+        rc = sem_init(&bufferFull[i], 0, 0);
+        checkResults("sem_init()\n", rc);
+    }
 
     for(i = 0; i < SIZE; i++) {
         rc = sem_init(&bufferEmpty[i], 0, 1);
@@ -70,9 +76,12 @@ void envia(int val) {
     buffer[tmpSend] = val;
     printf(">Inserting %d to position %d\n", val, tmpSend);
 
+    for(i = 0; i < n_receivers; i++)
+        sem_post(&bufferFull[tmpSend]);
+
     sem_wait(&lock);
     for(i = 0; i < waitSend; i++)
-        sem_post(&bufferFull);
+        sem_post(&waitSender);
     waitSend = 0;
     sem_post(&lock);
 }
@@ -81,15 +90,19 @@ int recebe(int id) {
     int item, position;
 
     position = current[id] % SIZE;
-    
+
     sem_wait(&lock);
     if(current[id] >= nextSend) {
         waitSend++;
         sem_post(&lock);
-        sem_wait(&bufferFull);
+        sem_wait(&waitSender);
     } else {
         sem_post(&lock);
     }
+
+    //while(current[id] >= nextSend);
+
+    sem_wait(&bufferFull[position]);
 
     item = buffer[position];
     printf("<(Thread %d)Reading %d from position %d\n", id, item, position);

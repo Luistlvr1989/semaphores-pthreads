@@ -11,7 +11,7 @@
 #define checkResults(string, val) {             	 \
 	if(val) {                                     	 \
    		printf("Failed with %d at %s", val, string); \
-   		exit(EXIT_FAILURE);                                     \
+   		exit(EXIT_FAILURE);                          \
  	}                                              	 \
 }
 
