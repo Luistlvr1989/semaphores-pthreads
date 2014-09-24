@@ -76,6 +76,12 @@ void envia(int val) {
     buffer[tmpSend] = val;
     printf(">Inserting %d to position %d\n", val, tmpSend);
 
+    /*!<
+        < await(bufferEmpty[tmpSend] > 0) bufferEmpty[tmpSend]--; >
+            buffer[tmpSend] = val;
+        < bufferFull[tmpSend] = n_receivers; >
+    */
+
     for(i = 0; i < n_receivers; i++)
         sem_post(&bufferFull[tmpSend]);
 
@@ -91,6 +97,12 @@ int recebe(int id) {
 
     position = current[id] % SIZE;
 
+    /*!<
+        < await(current[id] < nextSend and bufferFull[position] > 0) bufferFull[position]--; >
+            item = buffer[position];
+            current[id]++;
+    */
+
     sem_wait(&lock);
     if(current[id] >= nextSend) {
         waitSend++;
@@ -99,8 +111,6 @@ int recebe(int id) {
     } else {
         sem_post(&lock);
     }
-
-    //while(current[id] >= nextSend);
 
     sem_wait(&bufferFull[position]);
 
